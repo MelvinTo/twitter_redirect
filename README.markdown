@@ -5,6 +5,7 @@ storm-starter contains a variety of examples of using Storm. If this is your fir
 1. ExclamationTopology: Basic topology written in all Java
 2. WordCountTopology: Basic topology that makes use of multilang by implementing one bolt in Python
 3. ReachTopology: Example of complex DRPC on top of Storm
+4. TwitterRedirect: Example of retweet twitter messages to weibo or other SNS websites.
 
 More information about Storm can be found on the [project page](http://github.com/nathanmarz/storm).
 
