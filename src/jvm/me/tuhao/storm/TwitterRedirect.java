@@ -1,12 +1,13 @@
 package me.tuhao.storm;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-import storm.starter.WordCountTopology.PrintCount;
 import storm.starter.WordCountTopology.SplitSentence;
 import storm.starter.WordCountTopology.WordCount;
 import storm.starter.spout.RandomSentenceSpout;
@@ -39,11 +40,12 @@ public class TwitterRedirect {
 	public static class TwitterMessageSpout extends BaseRichSpout {
 	    SpoutOutputCollector _collector;
 	    Date _startDate;
-	    int _interval;
+	    static int _interval = 1000;
 	    static String _consumerToken = "kiD2bfu2gTWJkhhPlasfw";
 	    static String _consumerSecret = "6lhg9lJNPmN7Ko8TSC7u10aCh0ueZIPiQcsb7KqfGRE";
 	    static String _accessToken = "79633-6MAgVoy0klpOgiEdAjPPRipsgtBqx05U7ub2MMYAg";
 	    static String _accessTokenSecret = "VNvTqpu1v32sK3J7QmKLSPjcAXIP9zWZmzMWQKnWY";
+	    static Twitter _twitter;
 	  
 	    @Override
 	    public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
@@ -52,7 +54,40 @@ public class TwitterRedirect {
 	        Calendar c = Calendar.getInstance();
 	        c.set(2012,7,2);
 	        _startDate = c.getTime();
-	        _interval = 1000;
+	        
+	        try {
+	        	 _twitter = new TwitterFactory().getInstance();
+	 	        
+	 	        _twitter.setOAuthConsumer(_consumerToken, _consumerSecret);
+	 	        RequestToken requestToken = _twitter.getOAuthRequestToken();
+	 	        AccessToken accessToken = null;
+	 	        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+	 	        while (null == accessToken) {
+	 	          System.out.println("Open the following URL and grant access to your account:");
+	 	          System.out.println(requestToken.getAuthorizationURL());
+	 	          System.out.print("Enter the PIN(if aviailable) or just hit enter.[PIN]:");
+	 	          String pin = br.readLine();
+	 	          try{
+	 	             if(pin.length() > 0){
+	 	               accessToken = _twitter.getOAuthAccessToken(requestToken, pin);
+	 	             }else{
+	 	               accessToken = _twitter.getOAuthAccessToken();
+	 	             }
+	 	             System.out.println("Access token is '" + accessToken.getToken() + "', and secret is '" + accessToken.getTokenSecret() + "'");
+	 	             
+	 	          } catch (TwitterException te) {
+	 	            if(401 == te.getStatusCode()){
+	 	              System.out.println("Unable to get the access token.");
+	 	            }else{
+	 	              te.printStackTrace();
+	 	            }
+	 	          }
+	 	        }
+	        } catch (Exception e) {
+	        	e.printStackTrace();
+	        }
+	       
+	        
 	    }
 
 	    @Override
@@ -60,12 +95,11 @@ public class TwitterRedirect {
 	    	Utils.sleep(_interval);
 	    	List<Status> statuses;
 			try {
-				Twitter twitter = new TwitterFactory().getInstance();
-				twitter.setOAuthConsumer(_consumerToken, _consumerSecret);
-				twitter.setOAuthAccessToken(new AccessToken(_accessToken, _accessToken));
+//				Twitter twitter = new TwitterFactory().getInstance();
+//				twitter.setOAuthAccessToken(new AccessToken(_accessToken, _accessToken));
 				
 				Date checkDate = new Date();
-				statuses = twitter.getUserTimeline("melvinto");
+				statuses = _twitter.getUserTimeline("melvinto");
 				
 				for(Status status : statuses) {
 		    		Date createDate = status.getCreatedAt();
