@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import org.apache.log4j.Logger;
+
 import storm.starter.WordCountTopology.SplitSentence;
 import storm.starter.WordCountTopology.WordCount;
 import storm.starter.spout.RandomSentenceSpout;
@@ -24,8 +26,10 @@ import backtype.storm.StormSubmitter;
 import backtype.storm.generated.AlreadyAliveException;
 import backtype.storm.generated.InvalidTopologyException;
 import backtype.storm.spout.SpoutOutputCollector;
+import backtype.storm.task.ShellBolt;
 import backtype.storm.task.TopologyContext;
 import backtype.storm.topology.BasicOutputCollector;
+import backtype.storm.topology.IRichBolt;
 import backtype.storm.topology.OutputFieldsDeclarer;
 import backtype.storm.topology.TopologyBuilder;
 import backtype.storm.topology.base.BaseBasicBolt;
@@ -35,16 +39,25 @@ import backtype.storm.tuple.Tuple;
 import backtype.storm.tuple.Values;
 import backtype.storm.utils.Utils;
 
+import weibo4j.Oauth;
+import weibo4j.model.WeiboException;
+import weibo4j.util.BareBonesBrowserLaunch;
+
 public class TwitterRedirect {
 
 	public static class TwitterMessageSpout extends BaseRichSpout {
 	    SpoutOutputCollector _collector;
 	    Date _startDate;
-	    static int _interval = 1000;
+	    static int _interval = 5 * 60 * 1000; // 5 minutes per query
+	    
 	    static String _consumerToken = "kiD2bfu2gTWJkhhPlasfw";
 	    static String _consumerSecret = "6lhg9lJNPmN7Ko8TSC7u10aCh0ueZIPiQcsb7KqfGRE";
+//	    static String _accessToken = "79633-6MAgVoy0klpOgiEdAjPPRipsgtBqx05U7ub2MMYAg";
+//	    static String _accessTokenSecret = "VNvTqpu1v32sK3J7QmKLSPjcAXIP9zWZmzMWQKnWY";
 	    static String _accessToken = "79633-6MAgVoy0klpOgiEdAjPPRipsgtBqx05U7ub2MMYAg";
 	    static String _accessTokenSecret = "VNvTqpu1v32sK3J7QmKLSPjcAXIP9zWZmzMWQKnWY";
+	    
+	    
 	    static Twitter _twitter;
 	  
 	    @Override
@@ -59,30 +72,32 @@ public class TwitterRedirect {
 	        	 _twitter = new TwitterFactory().getInstance();
 	 	        
 	 	        _twitter.setOAuthConsumer(_consumerToken, _consumerSecret);
-	 	        RequestToken requestToken = _twitter.getOAuthRequestToken();
-	 	        AccessToken accessToken = null;
-	 	        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-	 	        while (null == accessToken) {
-	 	          System.out.println("Open the following URL and grant access to your account:");
-	 	          System.out.println(requestToken.getAuthorizationURL());
-	 	          System.out.print("Enter the PIN(if aviailable) or just hit enter.[PIN]:");
-	 	          String pin = br.readLine();
-	 	          try{
-	 	             if(pin.length() > 0){
-	 	               accessToken = _twitter.getOAuthAccessToken(requestToken, pin);
-	 	             }else{
-	 	               accessToken = _twitter.getOAuthAccessToken();
-	 	             }
-	 	             System.out.println("Access token is '" + accessToken.getToken() + "', and secret is '" + accessToken.getTokenSecret() + "'");
-	 	             
-	 	          } catch (TwitterException te) {
-	 	            if(401 == te.getStatusCode()){
-	 	              System.out.println("Unable to get the access token.");
-	 	            }else{
-	 	              te.printStackTrace();
-	 	            }
-	 	          }
-	 	        }
+//	 	        RequestToken requestToken = _twitter.getOAuthRequestToken();
+	            _twitter.setOAuthAccessToken(new AccessToken(_accessToken, _accessTokenSecret));
+
+//	 	        AccessToken accessToken = null;
+//	 	        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+//	 	        while (null == accessToken) {
+//	 	          System.out.println("Open the following URL and grant access to your account:");
+//	 	          System.out.println(requestToken.getAuthorizationURL());
+//	 	          System.out.print("Enter the PIN(if aviailable) or just hit enter.[PIN]:");
+//	 	          String pin = br.readLine();
+//	 	          try{
+//	 	             if(pin.length() > 0){
+//	 	               accessToken = _twitter.getOAuthAccessToken(requestToken, pin);
+//	 	             }else{
+//	 	               accessToken = _twitter.getOAuthAccessToken();
+//	 	             }
+//	 	             System.out.println("Access token is '" + accessToken.getToken() + "', and secret is '" + accessToken.getTokenSecret() + "'");
+//	 	             
+//	 	          } catch (TwitterException te) {
+//	 	            if(401 == te.getStatusCode()){
+//	 	              System.out.println("Unable to get the access token.");
+//	 	            }else{
+//	 	              te.printStackTrace();
+//	 	            }
+//	 	          }
+//	 	        }
 	        } catch (Exception e) {
 	        	e.printStackTrace();
 	        }
@@ -92,7 +107,13 @@ public class TwitterRedirect {
 
 	    @Override
 	    public void nextTuple() {
-	    	Utils.sleep(_interval);
+	    	System.out.println("next Tuple");
+	    	_collector.emit(new Values("this is a test message http://t.co/re0NZXMm"));
+	    	
+	    	if(true) {
+	    		Utils.sleep(_interval);
+	    		return;
+	    	}
 	    	List<Status> statuses;
 			try {
 //				Twitter twitter = new TwitterFactory().getInstance();
@@ -117,6 +138,9 @@ public class TwitterRedirect {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
+			
+	    	Utils.sleep(_interval);
+
 	    }        
 
 	    @Override
@@ -133,7 +157,68 @@ public class TwitterRedirect {
 	    }
 	    
 	}
-	
+	 public static class ShortURLToLongBolt extends ShellBolt implements IRichBolt {
+
+	    public ShortURLToLongBolt() {
+	        super("ruby", "shorturltolong.rb");
+	    }
+	        
+		@Override
+		public void declareOutputFields(OutputFieldsDeclarer declarer) {
+            declarer.declare(new Fields("message"));			
+		}
+
+		@Override
+		public Map<String, Object> getComponentConfiguration() {
+			// TODO Auto-generated method stub
+			return null;
+		}
+ 
+	 }
+	 
+	 public static class LongURLToWeiboShortBolt extends BaseBasicBolt {
+		 
+		 private static String _accessToken = "2.00iEDJqBq4ckjCa24f38ba3dTFk1NB";
+		 
+		 @Override
+		 public void declareOutputFields(OutputFieldsDeclarer declarer) {
+			 declarer.declare(new Fields("message"));						
+		 }
+
+		@Override
+		public void execute(Tuple input, BasicOutputCollector collector) {
+			
+			String message = input.getString(0);
+			
+			try {
+				Oauth oauth = new Oauth();
+				
+				BareBonesBrowserLaunch.openURL(oauth.authorize("code"));
+				System.out.println(oauth.authorize("code"));
+				System.out.print("Hit enter when it's done.[Enter]:");
+				
+				BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+
+				String code = br.readLine();
+				//			Log.logInfo("code: " + code);
+				try{
+					System.out.println(oauth.getAccessTokenByCode(code));
+				} catch (WeiboException e) {
+					if(401 == e.getStatusCode()){
+						//					Log.logInfo("Unable to get the access token.");
+					}else{
+						e.printStackTrace();
+					}
+				}
+			} catch (Exception e) {
+
+			}
+			
+			collector.emit(new Values(message));
+		}
+		 
+	 }
+	 
 	 public static class WeiboPostBolt extends BaseBasicBolt {
 
 		 @Override
@@ -155,9 +240,10 @@ public class TwitterRedirect {
 		TopologyBuilder builder = new TopologyBuilder();
         
         builder.setSpout("twitter", new TwitterMessageSpout(), 1);
-        
+        builder.setBolt("short2long", new ShortURLToLongBolt(), 2).shuffleGrouping("twitter");
+        builder.setBolt("long2short", new LongURLToWeiboShortBolt(), 2).shuffleGrouping("short2long");
         builder.setBolt("weibo", new WeiboPostBolt(), 1)
-                 .shuffleGrouping("twitter");
+                 .shuffleGrouping("long2short");
 
         Config conf = new Config();
         conf.setDebug(true);
